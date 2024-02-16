@@ -1,0 +1,14 @@
+metrics:
+  global:
+    scrape_interval: 5s
+  configs:
+  - name: hosted-prometheus
+    scrape_configs:
+      - job_name: node
+        static_configs:
+         - targets: ['localhost:9100', 'localhost:9110']
+    remote_write:
+      - url: https://prom.cantor-ai.net/api/v1/write
+        basic_auth:
+          username: ''
+          password: ''
