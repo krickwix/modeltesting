@@ -1,0 +1,83 @@
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: stable-diffusion
+spec:
+  serviceUnhealthySecondThreshold: 900 # Config for the health check threshold for Ray Serve applications. Default value is 900.
+  deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for Ray dashboard agent. Default value is 300.
+  serveConfigV2: |
+    applications:
+      - name: stable_diffusion
+        import_path: stable_diffusion:entrypoint
+        runtime_env:
+          working_dir: "https://cantor-pub-assets.s3.us-east-1.amazonaws.com/stable_diffusion.py.zip?response-content-disposition=inline&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEH0aCXVzLWVhc3QtMSJHMEUCIF5WtN5%2BDP6lXdU2WgKezNFC%2FNOYnVhmsCQpbW45jkODAiEAi%2FFD%2Bc7u7WM%2FxrH5uOkFIbOI3GGxM7Y3%2FE0Bk%2FX%2BfbgqwwMIpv%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgw5NTg2NTMxNzM1NjUiDJbgdkFg8bbQw2gGHCqXA3DXmQeMZd%2F8D5%2B94LET%2FWReUfNhYOrvsL8KRMKfJoT0BBaoI6LXcRTG%2F0Yy25%2BfWP1G2oeTEcEivhrIvtwBP5j5p%2F4YCSOqidORx2DWhD6Cf5TBnZxNRHAIS7gKHyzb2rLXUHVIrPq0Yb%2BhL4C2TsWjIowqHwCOLcl89mmUS9dJwVISsQfayMRdhDtqwt8P8%2Bem30j67rda2LkONF%2BngX7un4QPQjHkte90I7CwOZbOFExz8BzTji57j7B1HhTnhSb26gUuPM4c84Fo%2BOYLoBWepAF%2BZxma7p4MPRuccDiwvBjED7ANnsRne0g7GbV0wRRaBhWGGpyRuOs5v4%2FUEtE9QwYKJpoJHqmOHaETHYQD7awCa6hjgg%2BBw3gb2yUreQQpDiNj0GYPHiNK%2BvhtDqStnKJFD62Qb1615bG%2B%2B93AoxDC6TCls%2BG8dWyudFhIQ7HGG0KgyLDhWgFT92TXaq9wSMMeC8fR5cZ4qGqtsOXM0pBbZsvn%2BEgxMP6eE98tRnzZcTett4cLEk3w7kaUnV5ujLVqVC7OMOP7vrAGOoQC0QJk62pODl%2FEdZBIyvR7UfkuGJAeOtfiCV5IlZmQvAstFw7vfcsNWWCBikMe%2FyLLWCcodqPBVNT5d6JhCjrF42MoMfrOtr60Rapa8la96kpDo5vzyzOOF11A2Y%2FJ3kxfn3kztMshzLGPQssKfWuSkK7kcp8VIyaCUSqIetsdKsVN%2Bwh2aYdKEYKGBoyb2VNZgmJgZowWTuGFNlBgoEoYzcXj18R1ath0pXkefq2L0NDuMYVe18yVT%2Bw8lD82wV3OsFRDUEvve9XUygIeH2WbBBlFbb765wcK03BHCXR6cYm3lAwBSlMp3RTxRvuRowfxrmKS4s5avZc9QhGo5SXPm1TYhMY%3D&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20240405T122608Z&X-Amz-SignedHeaders=host&X-Amz-Expires=43200&X-Amz-Credential=ASIA56NBOR46QGM4HIU5%2F20240405%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Signature=8d6425b78ad19971fae32d33e87658c5b6141679813429856bb2ab019d172236"
+          pip: ["diffusers","transformers","git+https://github.com/huggingface/optimum-habana.git"]
+  rayClusterConfig:
+    rayVersion: '2.10.0' # Should match the Ray version in the image of the containers
+    ######################headGroupSpecs#################################
+    # Ray head pod template.
+    headGroupSpec:
+      # The `rayStartParams` are used to configure the `ray start` command.
+      # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+      # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
+      rayStartParams:
+        dashboard-host: '0.0.0.0'
+      # Pod template
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: krickwix/ray-habana:u2204.1.15.0
+            ports:
+            - containerPort: 6379
+              name: gcs
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            - containerPort: 8000
+              name: serve
+            volumeMounts:
+              - mountPath: /tmp/ray
+                name: ray-logs
+            resources:
+              limits:
+                cpu: "2"
+                memory: "8G"
+              requests:
+                cpu: "2"
+                memory: "8G"
+          volumes:
+            - name: ray-logs
+              emptyDir: {}
+    workerGroupSpecs:
+    # The pod replicas in this group typed worker
+    - replicas: 1
+      minReplicas: 1
+      maxReplicas: 10
+      groupName: gpu-group
+      rayStartParams: {}
+      # Pod template
+      template:
+        spec:
+          containers:
+          - name: ray-worker
+            image: krickwix/ray-habana:u2204.1.15.0
+            resources:
+              limits:
+                cpu: 4
+                memory: "16G"
+                habana.ai/gaudi: 1
+              requests:
+                cpu: 3
+                memory: "12G"
+                habana.ai/gaudi: 1
+            securityContext:
+              capabilities:
+                add: ["SYS_NICE"]
+          # Please add the following taints to the GPU node.
+          tolerations:
+            - key: "ray.io/node-type"
+              operator: "Equal"
+              value: "worker"
+              effect: "NoSchedule"

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLAMA Query</title>
+</head>
+<body>
+    <h1>LLAMA Query</h1>
+    <form id="query-form" action="/" method="post">
+        <label for="prompt">Enter your prompt:</label><br>
+        <textarea id="prompt" name="prompt" rows="4" cols="50"></textarea><br>
+        <input type="submit" value="Submit">
+    </form>
+    <div id="response-container"></div>
+
+    <script>
+        document.getElementById("query-form").addEventListener("submit", function(event) {
+            event.preventDefault();
+            var form = event.target;
+            var formData = new FormData(form);
+
+            fetch(form.action, {
+                method: form.method,
+                body: formData
+            })
+            .then(response => {
+                const reader = response.body.getReader();
+                return new ReadableStream({
+                    start(controller) {
+                        function push() {
+                            reader.read().then(({ done, value }) => {
+                                if (done) {
+                                    controller.close();
+                                    return;
+                                }
+                                controller.enqueue(value);
+                                push();
+                            }).catch(error => {
+                                console.error('Error:', error);
+                                controller.error(error);
+                            });
+                        }
+                        push();
+                    }
+                });
+            })
+            .then(stream => {
+                return new Response(stream);
+            })
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById("response-container").innerHTML += data;
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    </script>
+</body>
+</html>

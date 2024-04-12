@@ -1,0 +1,58 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: kuberay4gaudi
+  region: us-east-1
+  version: "1.27"
+
+vpc:
+  nat:
+    gateway: HighlyAvailable # other options: Disable, Single (default)
+
+managedNodeGroups:
+  - name: kuberay-ng-gp
+    instanceType: m5.8xlarge
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 3
+    privateNetworking: true
+    ssh:
+      allow: true # will use ~/.ssh/id_rsa.pub as the default ssh key
+    iam:
+      withAddonPolicies:
+        ebs: true
+        fsx: true
+        efs: true
+        externalDNS: true
+        certManager: true
+    tags:
+      k8s.io/cluster-autoscaler/enabled: "true"
+  - name: kuberay-ng-gaudi
+    instanceType: dl1.24xlarge
+    volumeSize: 500
+    minSize: 1
+    desiredCapacity: 1
+    maxSize: 4
+    privateNetworking: true
+    ami: ami-08afed0791964726b
+    amiFamily: AmazonLinux2
+    overrideBootstrapCommand: |
+      #!/bin/bash
+      /etc/eks/bootstrap.sh kuberay4gaudi
+    tags:
+      k8s.io/cluster-autoscaler/node-template/resources/habana.ai/gaudi: "8"
+      k8s.io/cluster-autoscaler/node-template/resources/hugepages-2Mi: "42000Mi"
+      k8s.io/cluster-autoscaler/enabled: "true"
+    availabilityZones: ["us-east-1b"]
+    ssh:
+      allow: true # will use ~/.ssh/id_rsa.pub as the default ssh key
+    iam:
+      withAddonPolicies:
+        ebs: true
+        fsx: true
+        efs: true
+        externalDNS: true
+        certManager: true   
+
+availabilityZones: ['us-east-1b','us-east-1a']

@@ -1,0 +1,122 @@
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: llama-2-7b
+spec:
+  serviceUnhealthySecondThreshold: 900 # Config for the health check threshold for Ray Serve applications. Default value is 900.
+  deploymentUnhealthySecondThreshold: 300 # Config for the health check threshold for Ray dashboard agent. Default value is 300.
+  serveConfigV2: |
+    applications:
+      - name: llama
+        import_path: llama:entrypoint
+        runtime_env:
+          working_dir: "https://cantor-pub-assets.s3.us-east-1.amazonaws.com/llama.py.zip?response-content-disposition=inline&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEAoaCXVzLWVhc3QtMSJIMEYCIQDj2dmlQ7NYcyX2uezaU%2FKv25cnWHMV%2BSbWLMKqo0teVAIhANlmVaT23NKnJReUyfxl5v%2FDB%2Fah%2Bbq2GjkTuwon557FKroDCEMQABoMOTU4NjUzMTczNTY1Igz1bHcLCK5%2BKLwUxRUqlwPT7aLKf92%2Fr2G2zrCySTloJkzfRJSVqWVn35kLlBmu0PDmyz4X7oJvpzegnh8HSWcC0zXfeA6jqRovqU4POk2%2FkSiSekCNDvotaJOAZWvEshYR4mFuyPoqio4zOOtFP9EebJz6G9ycrDeaLDAZt4X%2BR6LvZKxbBoG65dSjlDwBKetSeO3XNJ7VuFnvdjvIj1MwI%2FYJQQesSqFRXQAMkErVF%2FSmv3OWNkkyPnk5EYtU4t5i5IDaYxuDF61AfAGKK0PQf39geOBDT6CbTSn9oq%2Bue%2FkM0Byh0YDwuuWvWRtVssG10IaOiX2QTk7XUaaPgoY%2Bxgo3zbw366rsv6DGZU713oeKurh7OlxVRmUgQKDyV2%2BnXEINS1VrWLffPursDwNOxRpfxCLa%2BcsT09GT9BYqqlbqqoLnjUOvwTl77z2lP78zMUTaBKjNDMcvw1dcOevPJnmatjIXkkj%2FEg9FvkiyBZuix1UsjXXgNc2qxb3N%2FbAdh5BVWAEC0WLhzGMVlDk%2F9FWILnUa0F7DI8P3AXnBr2%2BnipdeyjCEzt6wBjqDAl4W%2F6Ff9NSXgqtfI2Li3GuzH5EnK8rVywsGQZmAdetETDB7jILmHnGILlNk%2BccHTkNM2ndKQN4BrWx1%2BmeaVirBybVeJD9HBbG9dnWfd%2F2jDvAsg%2BUt3x0XLCQt%2B%2Blv4yvBq8YKXaUIJNc6W8vk0OnBz03dAAR7ie%2BOFhvSaPpgvEfr575X3WOWAz%2BOv%2Fuy3PV%2FUjSR054y%2BsRrOUmFkzV3WYA6ppqE58msiY554YiNQhmRyy3IacRT0shpq9zGIrZ60728T3p%2Bsfr1L%2FUwGnqWa2g%2F1WLe9FnE4SnhSphwF8b1fyypNlkEVIyPjfW%2FB%2B7o3WRfAfGt07uDhPTJJFTWWu8%3D&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20240411T093250Z&X-Amz-SignedHeaders=host&X-Amz-Expires=43200&X-Amz-Credential=ASIA56NBOR46SM7CYKX5%2F20240411%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Signature=c3c7f1f7f391ca31cef985e67a78dba114caf117e9d6b58fa0f186eecb8727d4"
+          pip: ["git+https://github.com/huggingface/optimum-habana.git"]
+        deployments:
+          - name: LlamaModel
+            max_ongoing_requests: 5
+            autoscaling_config:
+              target_ongoing_requests: 2
+              min_replicas: 1
+              max_replicas: 2
+            max_replicas_per_node: 1
+            ray_actor_options:
+              num_cpus: 4
+      - name: falcon
+        import_path: llama:entrypoint2     
+        runtime_env:
+          working_dir: "https://cantor-pub-assets.s3.us-east-1.amazonaws.com/llama.py.zip?response-content-disposition=inline&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEAoaCXVzLWVhc3QtMSJIMEYCIQDj2dmlQ7NYcyX2uezaU%2FKv25cnWHMV%2BSbWLMKqo0teVAIhANlmVaT23NKnJReUyfxl5v%2FDB%2Fah%2Bbq2GjkTuwon557FKroDCEMQABoMOTU4NjUzMTczNTY1Igz1bHcLCK5%2BKLwUxRUqlwPT7aLKf92%2Fr2G2zrCySTloJkzfRJSVqWVn35kLlBmu0PDmyz4X7oJvpzegnh8HSWcC0zXfeA6jqRovqU4POk2%2FkSiSekCNDvotaJOAZWvEshYR4mFuyPoqio4zOOtFP9EebJz6G9ycrDeaLDAZt4X%2BR6LvZKxbBoG65dSjlDwBKetSeO3XNJ7VuFnvdjvIj1MwI%2FYJQQesSqFRXQAMkErVF%2FSmv3OWNkkyPnk5EYtU4t5i5IDaYxuDF61AfAGKK0PQf39geOBDT6CbTSn9oq%2Bue%2FkM0Byh0YDwuuWvWRtVssG10IaOiX2QTk7XUaaPgoY%2Bxgo3zbw366rsv6DGZU713oeKurh7OlxVRmUgQKDyV2%2BnXEINS1VrWLffPursDwNOxRpfxCLa%2BcsT09GT9BYqqlbqqoLnjUOvwTl77z2lP78zMUTaBKjNDMcvw1dcOevPJnmatjIXkkj%2FEg9FvkiyBZuix1UsjXXgNc2qxb3N%2FbAdh5BVWAEC0WLhzGMVlDk%2F9FWILnUa0F7DI8P3AXnBr2%2BnipdeyjCEzt6wBjqDAl4W%2F6Ff9NSXgqtfI2Li3GuzH5EnK8rVywsGQZmAdetETDB7jILmHnGILlNk%2BccHTkNM2ndKQN4BrWx1%2BmeaVirBybVeJD9HBbG9dnWfd%2F2jDvAsg%2BUt3x0XLCQt%2B%2Blv4yvBq8YKXaUIJNc6W8vk0OnBz03dAAR7ie%2BOFhvSaPpgvEfr575X3WOWAz%2BOv%2Fuy3PV%2FUjSR054y%2BsRrOUmFkzV3WYA6ppqE58msiY554YiNQhmRyy3IacRT0shpq9zGIrZ60728T3p%2Bsfr1L%2FUwGnqWa2g%2F1WLe9FnE4SnhSphwF8b1fyypNlkEVIyPjfW%2FB%2B7o3WRfAfGt07uDhPTJJFTWWu8%3D&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20240411T093250Z&X-Amz-SignedHeaders=host&X-Amz-Expires=43200&X-Amz-Credential=ASIA56NBOR46SM7CYKX5%2F20240411%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Signature=c3c7f1f7f391ca31cef985e67a78dba114caf117e9d6b58fa0f186eecb8727d4"
+          pip: ["git+https://github.com/huggingface/optimum-habana.git"]
+        deployments:
+          - name: FalconModel
+            max_ongoing_requests: 5
+            autoscaling_config:
+              target_ongoing_requests: 2
+              min_replicas: 1
+              max_replicas: 2
+            max_replicas_per_node: 1
+            ray_actor_options:
+              num_cpus: 4
+
+  rayClusterConfig:
+    rayVersion: '2.10.0' # Should match the Ray version in the image of the containers
+    ######################headGroupSpecs#################################
+    # Ray head pod template.
+    headGroupSpec:
+      # The `rayStartParams` are used to configure the `ray start` command.
+      # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
+      # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
+      rayStartParams:
+        dashboard-host: '0.0.0.0'
+      # Pod template
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: krickwix/ray-habana:u2204.1.15.0
+            ports:
+            - containerPort: 6379
+              name: gcs
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            - containerPort: 8000
+              name: serve
+            volumeMounts:
+              - mountPath: /tmp/ray
+                name: ray-logs
+            resources:
+              limits:
+                cpu: "2"
+                memory: "8G"
+              requests:
+                cpu: "2"
+                memory: "8G"
+          volumes:
+            - name: ray-logs
+              emptyDir: {}
+    workerGroupSpecs:
+    # The pod replicas in this group typed worker
+    - replicas: 2
+      minReplicas: 1
+      maxReplicas: 4
+      groupName: gpu-group
+      rayStartParams: {}
+      # Pod template
+      template:
+        spec:
+          hostIPC: true
+          containers:
+          - name: ray-worker
+            image: krickwix/ray-habana:u2204.1.15.0
+            resources:
+              limits:
+                cpu: 8
+                memory: "150G"
+                habana.ai/gaudi: 1
+                hugepages-2Mi: 10000Mi
+              requests:
+                cpu: 8
+                memory: "150G"
+                habana.ai/gaudi: 1
+                hugepages-2Mi: 10000Mi
+            securityContext:
+              # allowPrivilegeEscalation: true
+              # privileged: true
+              capabilities:
+                add: ["SYS_NICE"]
+          #   volumeMounts:
+          #   - name: models-volume
+          #     mountPath: /models
+          # volumes: # Define the volume here
+          # - name: models-volume
+          #   persistentVolumeClaim:
+          #     claimName: models-pvc
+
+          # Please add the following taints to the GPU node.
+          # tolerations:
+          #   - key: "ray.io/node-type"
+          #     operator: "Equal"
+          #     value: "worker"
+          #     effect: "NoSchedule"

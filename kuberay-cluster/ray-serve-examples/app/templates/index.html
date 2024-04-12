@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat with LLM</title>
+</head>
+<body>
+    <h2>Chat with LLM</h2>
+    <textarea id="prompt" rows="4" cols="50" placeholder="Enter your prompt here..."></textarea><br>
+    <button onclick="sendPrompt()">Send</button>
+    <div id="response"></div>
+
+    <script>
+        function sendPrompt() {
+            const promptText = document.getElementById("prompt").value;
+            fetch('/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({prompt: promptText}),
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("response").innerText = data.response;
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+    </script>
+</body>
+</html>

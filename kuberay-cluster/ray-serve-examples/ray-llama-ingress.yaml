@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ray-llama-ingress
+  annotations:
+    ingress.kubernetes.io/rewrite-target: /
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - ray-llama.cantor-ai.net
+    secretName: ray-llama-tls
+  rules:
+   - host: ray-llama.cantor-ai.net
+     http:
+       paths:
+       - path: /
+         pathType: Prefix
+         backend:
+          service:
+            name: llama-2-7b-serve-svc
+            port:
+              number: 8000     

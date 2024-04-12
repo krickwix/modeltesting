@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ray-falcon-ingress
+  annotations:
+    ingress.kubernetes.io/rewrite-target: /
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - ray-falcon.cantor-ai.net
+    secretName: ray-falcon-tls
+  rules:
+   - host: ray-falcon.cantor-ai.net
+     http:
+       paths:
+       - path: /
+         pathType: Prefix
+         backend:
+          service:
+            name: falcon-7b-serve-svc
+            port:
+              number: 8000     

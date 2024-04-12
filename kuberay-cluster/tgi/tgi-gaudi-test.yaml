@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tgi-gaudi-test
+  labels:
+    app: tgi-gaudi-test
+spec:
+  hostIPC: true
+  restartPolicy: OnFailure
+  containers:
+  - name: tgi-gaudi-test
+    image: ghcr.io/huggingface/tgi-gaudi:1.2.1
+    command: ["text-generation-launcher", 
+      "-p", "80", 
+      "--model-id", "tiiuae/falcon-40b",
+      "--json-output", 
+      "--sharded", "true", 
+      "--dtype", "bfloat16"]
+    resources:
+      limits:
+        habana.ai/gaudi: 8
+        memory: 409Gi
+        hugepages-2Mi: 42000Mi
+      requests:
+        habana.ai/gaudi: 8
+        memory: 409Gi
+        hugepages-2Mi: 42000Mi
+    securityContext:
+      capabilities:
+        add: ["SYS_NICE"]
+    env:
+      - name: "PT_HPU_ENABLE_LAZY_COLLECTIVES"
+        value: "true"
+      - name: "MASTER_PORT"
+        value: "12345" 
+      - name:  "MASTER_ADDR"
+        value: "127.0.0.1"
+      - name:  "WORLD_SIZE"
+        value: "8"
+      - name: "CUDA_VISIBLE_DEVICES"
+        value: "0,1,2,3,4,5,6,7"
+      - name: "HUGGING_FACE_HUB_TOKEN"
+        value: "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"
+    ports:
+    - containerPort: 80
+
+  # tolerations:
+  # - key: "ray.io/node-type"
+  #   operator: "Equal"
+  #   value: "worker"
+  #   effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tgi-gaudi-test
+spec:
+  selector:
+    app: tgi-gaudi-test
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: LoadBalancer

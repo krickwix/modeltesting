@@ -1,0 +1,13 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: aws-efs-csi
+provisioner: efs.csi.aws.com
+parameters:
+  fileSystemId: "fs-08fba0050004cb7ed" # Replace with your Amazon EFS file system ID
+  directoryPerms: "777"
+  gidRangeStart: "1000"
+  gidRangeEnd: "2000"
+  provisioningMode: efs-ap
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
