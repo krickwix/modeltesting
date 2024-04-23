@@ -1,0 +1,10 @@
+FROM krickwix/ray-habana:u2204.1.15.0
+
+RUN pip install "git+https://github.com/huggingface/optimum-habana.git" \
+                "tiktoken" \
+                "git+https://github.com/HabanaAI/DeepSpeed.git@1.15.0 \
+                ray[all]"
+RUN wget https://vault.habana.ai/artifactory/gaudi-pt-modules/1.15.1/15/pytorch/ubuntu2204/pytorch_modules-v2.2.0_1.15.1_15.tgz && \
+    tar xf pytorch_modules-v2.2.0_1.15.1_15.tgz && \
+    ./install.sh 1.15.1 15 && \
+    rm -rf pytorch_modules-v2.2.0_1.15.1_15.tgz install.sh *.whl
