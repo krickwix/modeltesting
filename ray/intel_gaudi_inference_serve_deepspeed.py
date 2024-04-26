@@ -1,9 +1,4 @@
-import tempfile
 from typing import Dict, Any
-from starlette.responses import Response, StreamingResponse
-from starlette.requests import Request
-import torch
-from transformers import TextStreamer
 
 import ray
 from ray import serve
@@ -18,6 +13,8 @@ HABANA_ENVS = {
     "PT_HPU_ENABLE_LAZY_COLLECTIVES": "true",
     "HABANA_VISIBLE_MODULES": "0,1,2,3,4,5,6,7",
 }
+
+import torch
 
 @ray.remote(resources={"HPU": 1})
 class DeepSpeedInferenceWorker:
@@ -87,6 +84,7 @@ class DeepSpeedInferenceWorker:
             get_ds_injection_policy,
             write_checkpoints_json,
         )
+        import tempfile
 
         # Construct the model with fake meta Tensors.
         # Loads the model weights from the checkpoint later.
@@ -115,21 +113,34 @@ class DeepSpeedInferenceWorker:
         # Initialize the inference engine.
         self.model = deepspeed.init_inference(model, **kwargs).module
 
-    def tokenize(self, prompt: str):
+    def tokenize(self, prompt):
         """Tokenize the input and move it to HPU."""
+        prompt_eng = [  {"role": "system", "content": "You are a helpful assistant. you provide structured and short answers"},
+                        {"role": "user", "content": prompt},
+                    ]
+        input_tokens = self.tokenizer.apply_chat_template(prompt_eng, add_generation_prompt=True, return_tensors="pt")
 
-        input_tokens = self.tokenizer(prompt, return_tensors="pt", padding=True)
-        return input_tokens.input_ids.to(device=self.device)
+        # input_tokens = self.tokenizer(prompt, return_tensors="pt", padding=True)
+        return input_tokens.to(device=self.device)
 
     def generate(self, prompt: str, **config: Dict[str, Any]):
         """Take in a prompt and generate a response."""
+        terminators = [
+            self.tokenizer.eos_token_id,
+            self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
+        ]
+        config["eos_token_id"] = terminators
 
-        input_ids = self.tokenize(prompt)
         gen_tokens = self.model.generate(input_ids, **config)
         return self.tokenizer.batch_decode(gen_tokens, skip_special_tokens=True)[0]
 
     def streaming_generate(self, prompt: str, streamer, **config: Dict[str, Any]):
         """Generate a streamed response given an input."""
+        terminators = [
+            self.tokenizer.eos_token_id,
+            self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
+        ]
+        config["eos_token_id"] = terminators
 
         input_ids = self.tokenize(prompt)
         self.model.generate(input_ids, streamer=streamer, **config)
@@ -140,9 +151,10 @@ class DeepSpeedInferenceWorker:
         We only need the rank 0 worker's result.
         Other workers return a fake streamer.
         """
-
+        
         if self._local_rank == 0:
-            return RayTextIteratorStreamer(self.tokenizer, skip_special_tokens=True)
+            return RayTextIteratorStreamer(self.tokenizer, skip_prompt=True,
+                                           skip_special_tokens=True)
         else:
 
             class FakeStreamer:
@@ -154,6 +166,7 @@ class DeepSpeedInferenceWorker:
 
             return FakeStreamer()
 
+from transformers import TextStreamer
 
 class RayTextIteratorStreamer(TextStreamer):
     def __init__(
@@ -183,18 +196,17 @@ class RayTextIteratorStreamer(TextStreamer):
         else:
             return value
 
+from starlette.requests import Request
+from starlette.responses import Response, StreamingResponse
 # Define the Ray Serve deployment.
 @serve.deployment
 class DeepSpeedLlamaModel:
+
     def __init__(self, world_size: int, model_id_or_path: str):
         self._world_size = world_size
 
         # Create the DeepSpeed workers
         self.deepspeed_workers = []
-        # self.deepspeed_workers.append(
-        #         DeepSpeedInferenceWorker.options(
-        #             runtime_env=RuntimeEnv(env_vars=HABANA_ENVS)
-        #         ).remote(model_id_or_path, world_size, 0))
         for i in range(world_size):
             print(f"Creating DeepSpeed worker {i}")
             self.deepspeed_workers.append(
@@ -264,7 +276,6 @@ class DeepSpeedLlamaModel:
         config["hpu_graphs"] = True
         # Lazy mode should be True when using HPU graphs.
         config["lazy_mode"] = True
-
         # Non-streaming case
         if not streaming_response:
             return self.generate(prompts, **config)
@@ -277,8 +288,6 @@ class DeepSpeedLlamaModel:
             media_type="text/plain",
         )
 
-
 # Replace the model ID with a path if necessary.
-entrypoint = DeepSpeedLlamaModel.bind(8, "/models/Meta-Llama-3-70B")
-# entrypoint = DeepSpeedLlamaModel.bind(8, "/models/Meta-Llama-3-8B")
+entrypoint = DeepSpeedLlamaModel.bind(8, "/data/models/Meta-Llama-3-8B-Instruct")
 
