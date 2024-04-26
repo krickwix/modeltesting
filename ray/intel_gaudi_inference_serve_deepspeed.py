@@ -69,15 +69,12 @@ class DeepSpeedInferenceWorker:
 
         # Load and configure the tokenizer.
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_id_or_path, use_fast=True
+            model_id_or_path, use_fast=True, padding_side="left"
         )
         self.tokenizer.padding_side = "left"
         self.tokenizer.eos_token = '<|eot_id|>'
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-
-        # from habana_frameworks.torch.distributed.hccl import initialize_distributed_hpu
-        # world_size, rank, local_rank = initialize_distributed_hpu()
 
         import habana_frameworks.torch.distributed.hccl as hccl
 
@@ -127,16 +124,6 @@ class DeepSpeedInferenceWorker:
         # Initialize the inference engine.
         self.model = deepspeed.init_inference(model, **kwargs).module
 
-    # def tokenize(self, prompt):
-    #     """Tokenize the input and move it to HPU."""
-    #     prompt_eng = [  {"role": "system", "content": "You are a helpful assistant. you provide structured and short answers"},
-    #                     {"role": "user", "content": prompt},
-    #                 ]
-    #     input_tokens = self.tokenizer.apply_chat_template(prompt_eng, add_generation_prompt=True, return_tensors="pt")
-
-    #     # input_tokens = self.tokenizer(prompt, return_tensors="pt", padding=True)
-    #     return input_tokens.to(device=self.device)
-
     def tokenize(self, conversation):
         """Tokenize the input and move it to HPU."""
         self.tokenizer.eos_token_id = 128009
@@ -156,28 +143,6 @@ class DeepSpeedInferenceWorker:
         input_tokens = self.tokenize(conversation)
         self.model.generate(input_tokens, streamer=streamer, **config)
         
-    # def generate(self, prompt: str, **config: Dict[str, Any]):
-    #     """Take in a prompt and generate a response."""
-    #     terminators = [
-    #         self.tokenizer.eos_token_id,
-    #         self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-    #     ]
-    #     config["eos_token_id"] = terminators
-
-    #     gen_tokens = self.model.generate(input_ids, **config)
-    #     return self.tokenizer.batch_decode(gen_tokens, skip_special_tokens=True)[0]
-
-    # def streaming_generate(self, prompt: str, streamer, **config: Dict[str, Any]):
-    #     """Generate a streamed response given an input."""
-    #     terminators = [
-    #         self.tokenizer.eos_token_id,
-    #         self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-    #     ]
-    #     config["eos_token_id"] = terminators
-
-    #     input_ids = self.tokenize(prompt)
-    #     self.model.generate(input_ids, streamer=streamer, **config)
-
     def get_streamer(self):
         """Return a streamer.
 
@@ -186,8 +151,9 @@ class DeepSpeedInferenceWorker:
         """
         
         if self._local_rank == 0:
+            self.tokenizer.eos_token = "<|eot_id|>"
             return RayTextIteratorStreamer(self.tokenizer, skip_prompt=True,
-                                           skip_special_tokens=False)
+                                           skip_special_tokens=True)
         else:
 
             class FakeStreamer:
@@ -231,6 +197,7 @@ class RayTextIteratorStreamer(TextStreamer):
 
 from starlette.requests import Request
 from starlette.responses import Response, StreamingResponse
+
 # Define the Ray Serve deployment.
 @serve.deployment
 class DeepSpeedLlamaModel:
@@ -323,4 +290,4 @@ class DeepSpeedLlamaModel:
         )
 
 # Replace the model ID with a path if necessary.
-entrypoint = DeepSpeedLlamaModel.bind(2, "/data/models/Meta-Llama-3-8B-Instruct")
+entrypoint = DeepSpeedLlamaModel.bind(8, "/data/models/Meta-Llama-3-70B-Instruct")
