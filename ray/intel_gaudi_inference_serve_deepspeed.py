@@ -14,6 +14,19 @@ HABANA_ENVS = {
     "HABANA_VISIBLE_MODULES": "0,1,2,3,4,5,6,7",
 }
 
+class Conversation:
+    def __init__(self):
+        self.history = []
+
+    def add_user_input(self, user_input):
+        self.history.append({"role": "user", "content": user_input})
+
+    def add_assistant_response(self, assistant_response):
+        self.history.append({"role": "assistant", "content": assistant_response})
+
+    def get_conversation(self):
+        return self.history
+
 import torch
 
 @ray.remote(resources={"HPU": 1})
@@ -56,9 +69,10 @@ class DeepSpeedInferenceWorker:
 
         # Load and configure the tokenizer.
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_id_or_path, use_fast=False, token=""
+            model_id_or_path, use_fast=True
         )
         self.tokenizer.padding_side = "left"
+        self.tokenizer.eos_token = '<|eot_id|>'
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
@@ -90,7 +104,7 @@ class DeepSpeedInferenceWorker:
         # Loads the model weights from the checkpoint later.
         with deepspeed.OnDevice(dtype=torch.bfloat16, device="meta"):
             model = AutoModelForCausalLM.from_config(
-                self.model_config, torch_dtype=torch.bfloat16
+                self.model_config, torch_dtype=torch.bfloat16,
             )
         model = model.eval()
 
@@ -113,37 +127,56 @@ class DeepSpeedInferenceWorker:
         # Initialize the inference engine.
         self.model = deepspeed.init_inference(model, **kwargs).module
 
-    def tokenize(self, prompt):
-        """Tokenize the input and move it to HPU."""
-        prompt_eng = [  {"role": "system", "content": "You are a helpful assistant. you provide structured and short answers"},
-                        {"role": "user", "content": prompt},
-                    ]
-        input_tokens = self.tokenizer.apply_chat_template(prompt_eng, add_generation_prompt=True, return_tensors="pt")
+    # def tokenize(self, prompt):
+    #     """Tokenize the input and move it to HPU."""
+    #     prompt_eng = [  {"role": "system", "content": "You are a helpful assistant. you provide structured and short answers"},
+    #                     {"role": "user", "content": prompt},
+    #                 ]
+    #     input_tokens = self.tokenizer.apply_chat_template(prompt_eng, add_generation_prompt=True, return_tensors="pt")
 
-        # input_tokens = self.tokenizer(prompt, return_tensors="pt", padding=True)
+    #     # input_tokens = self.tokenizer(prompt, return_tensors="pt", padding=True)
+    #     return input_tokens.to(device=self.device)
+
+    def tokenize(self, conversation):
+        """Tokenize the input and move it to HPU."""
+        self.tokenizer.eos_token_id = 128009
+        input_tokens = self.tokenizer.apply_chat_template(conversation, add_generation_prompt=False, return_tensors="pt")
         return input_tokens.to(device=self.device)
 
-    def generate(self, prompt: str, **config: Dict[str, Any]):
-        """Take in a prompt and generate a response."""
-        terminators = [
-            self.tokenizer.eos_token_id,
-            self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-        ]
-        config["eos_token_id"] = terminators
-
-        gen_tokens = self.model.generate(input_ids, **config)
+    def generate(self, conversation, **config):
+        """Take in a conversation and generate a response."""
+        config["eos_token_id"] = 128009
+        input_tokens = self.tokenize(conversation)
+        gen_tokens = self.model.generate(input_tokens, **config)
         return self.tokenizer.batch_decode(gen_tokens, skip_special_tokens=True)[0]
 
-    def streaming_generate(self, prompt: str, streamer, **config: Dict[str, Any]):
-        """Generate a streamed response given an input."""
-        terminators = [
-            self.tokenizer.eos_token_id,
-            self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-        ]
-        config["eos_token_id"] = terminators
+    def streaming_generate(self, conversation, streamer, **config):
+        """Generate a streamed response given a conversation."""
+        config["eos_token_id"] = 128009
+        input_tokens = self.tokenize(conversation)
+        self.model.generate(input_tokens, streamer=streamer, **config)
+        
+    # def generate(self, prompt: str, **config: Dict[str, Any]):
+    #     """Take in a prompt and generate a response."""
+    #     terminators = [
+    #         self.tokenizer.eos_token_id,
+    #         self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
+    #     ]
+    #     config["eos_token_id"] = terminators
 
-        input_ids = self.tokenize(prompt)
-        self.model.generate(input_ids, streamer=streamer, **config)
+    #     gen_tokens = self.model.generate(input_ids, **config)
+    #     return self.tokenizer.batch_decode(gen_tokens, skip_special_tokens=True)[0]
+
+    # def streaming_generate(self, prompt: str, streamer, **config: Dict[str, Any]):
+    #     """Generate a streamed response given an input."""
+    #     terminators = [
+    #         self.tokenizer.eos_token_id,
+    #         self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
+    #     ]
+    #     config["eos_token_id"] = terminators
+
+    #     input_ids = self.tokenize(prompt)
+    #     self.model.generate(input_ids, streamer=streamer, **config)
 
     def get_streamer(self):
         """Return a streamer.
@@ -154,7 +187,7 @@ class DeepSpeedInferenceWorker:
         
         if self._local_rank == 0:
             return RayTextIteratorStreamer(self.tokenizer, skip_prompt=True,
-                                           skip_special_tokens=True)
+                                           skip_special_tokens=False)
         else:
 
             class FakeStreamer:
@@ -254,10 +287,10 @@ class DeepSpeedLlamaModel:
 
     async def __call__(self, http_request: Request):
         """Handle received HTTP requests."""
-
         # Load fields from the request
         json_request: str = await http_request.json()
         text = json_request["text"]
+        print(f"Received request: {text}")
         # Config used in generation
         config = json_request.get("config", {})
         streaming_response = json_request["stream"]
@@ -281,6 +314,7 @@ class DeepSpeedLlamaModel:
             return self.generate(prompts, **config)
 
         # Streaming case
+        print(f"Streaming response for {prompts}")
         self.streaming_generate(prompts, **config)
         return StreamingResponse(
             self.consume_streamer(self.streamers[0]),
@@ -289,5 +323,4 @@ class DeepSpeedLlamaModel:
         )
 
 # Replace the model ID with a path if necessary.
-entrypoint = DeepSpeedLlamaModel.bind(8, "/data/models/Meta-Llama-3-8B-Instruct")
-
+entrypoint = DeepSpeedLlamaModel.bind(2, "/data/models/Meta-Llama-3-8B-Instruct")
