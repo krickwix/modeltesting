@@ -1,6 +1,6 @@
 import requests
 
-config = {"max_new_tokens": 512,
+config = {"max_new_tokens": 4096,
           "do_sample": True,
           "num_return_sequences": 1,
           "top_k": 50,
@@ -10,7 +10,7 @@ config = {"max_new_tokens": 512,
 
 class Conversation:
     def __init__(self):
-        self.history = [{"role": "system", "content": "you generate short and non offensive answers."}]
+        self.history = [{"role": "system", "content": "you are a helpful and thorough assistant."}]
 
     def add_user_input(self, user_input):
         self.history.append({"role": "user", "content": user_input})
@@ -36,8 +36,8 @@ while True:
         continue
     if user_prompt:
         conversation.add_user_input(user_prompt)
-        sample_input = {"text": conversation.get_conversation(), "config": config, "stream": True}
-        outputs = requests.post("http://127.0.0.1:8000/", json=sample_input, stream=True)
+        sample_input = {"text": conversation.get_conversation(), "config": config, "stream": False}
+        outputs = requests.post("http://127.0.0.1:8000/", json=sample_input, stream=False)
         outputs.raise_for_status()
 
         assistant_response = ""
@@ -46,4 +46,4 @@ while True:
             print(output, end="", flush=True)
 
         conversation.add_assistant_response(assistant_response)
-        print()
+        print("\n**")

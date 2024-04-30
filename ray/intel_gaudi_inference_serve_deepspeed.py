@@ -63,18 +63,19 @@ class DeepSpeedInferenceWorker:
         self.model_config = AutoConfig.from_pretrained(
             model_id_or_path,
             torch_dtype=torch.bfloat16,
-            token="",
-            trust_remote_code=False,
         )
 
         # Load and configure the tokenizer.
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_id_or_path, use_fast=True, padding_side="left"
+            model_id_or_path, 
         )
-        self.tokenizer.padding_side = "left"
-        self.tokenizer.eos_token = '<|eot_id|>'
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.terminators = [
+            self.tokenizer.eos_token_id,
+            self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
+        ]
+
+        # if self.tokenizer.pad_token is None:
+        #     self.tokenizer.pad_token = self.tokenizer.eos_token
 
         import habana_frameworks.torch.distributed.hccl as hccl
 
@@ -108,7 +109,7 @@ class DeepSpeedInferenceWorker:
         # Create a file to indicate where the checkpoint is.
         checkpoints_json = tempfile.NamedTemporaryFile(suffix=".json", mode="w+")
         write_checkpoints_json(
-            self.model_id_or_path, self._local_rank, checkpoints_json, token=""
+            self.model_id_or_path, self._local_rank, checkpoints_json
         )
 
         # Prepare the DeepSpeed inference configuration.
@@ -126,20 +127,26 @@ class DeepSpeedInferenceWorker:
 
     def tokenize(self, conversation):
         """Tokenize the input and move it to HPU."""
-        self.tokenizer.eos_token_id = 128009
-        input_tokens = self.tokenizer.apply_chat_template(conversation, add_generation_prompt=False, return_tensors="pt")
+        input_tokens = self.tokenizer.apply_chat_template(conversation, 
+                                                          add_generation_prompt=True, 
+                                                          return_tensors="pt")
         return input_tokens.to(device=self.device)
 
     def generate(self, conversation, **config):
         """Take in a conversation and generate a response."""
-        config["eos_token_id"] = 128009
         input_tokens = self.tokenize(conversation)
-        gen_tokens = self.model.generate(input_tokens, **config)
-        return self.tokenizer.batch_decode(gen_tokens, skip_special_tokens=True)[0]
+        gen_tokens = self.model.generate(input_tokens, 
+                                        #  **config, 
+                                        max_new_tokens=4096,
+                                        do_sample=False,
+                                        temperature=0.6,
+                                        top_p=0.9,                
+                                        eos_token_id=self.terminators)
+        response = gen_tokens[0][input_tokens.shape[-1]:]
+        return self.tokenizer.decode(response, skip_special_tokens=True)
 
     def streaming_generate(self, conversation, streamer, **config):
         """Generate a streamed response given a conversation."""
-        config["eos_token_id"] = 128009
         input_tokens = self.tokenize(conversation)
         self.model.generate(input_tokens, streamer=streamer, **config)
         
@@ -151,7 +158,6 @@ class DeepSpeedInferenceWorker:
         """
         
         if self._local_rank == 0:
-            self.tokenizer.eos_token = "<|eot_id|>"
             return RayTextIteratorStreamer(self.tokenizer, skip_prompt=True,
                                            skip_special_tokens=True)
         else:
