@@ -24,7 +24,12 @@ def train_loop_per_worker():
     from torch.utils import data
     from torch.utils.data import DataLoader
     import numpy as np
-    import cv2, os, random, shutil
+    import cv2, os, random, shutil, sys
+    from pathlib import Path
+
+    if not Path("/tmp/Omni-SR").is_dir():
+        os.system("git clone https://github.com/Francis0625/Omni-SR.git /tmp/Omni-SR")
+    sys.path.append('/tmp/Omni-SR')
     import components.OmniSR as OmniSR
 
     class OmniSRDataset(data.Dataset):
@@ -151,9 +156,10 @@ def main():
     from ray.train import RunConfig
     import ray
 
-    runtime_env = {"pip": ["einops","opencv-python"],
+    runtime_env = {"pip": ["einops","opencv-python","gitpython"],
                    "env_vars": {"PT_HPU_ENABLE_LAZY_COLLECTIVES": "true",
-                                "PT_HPU_LAZY_MODE": "0"}
+                                "PT_HPU_LAZY_MODE": "0",
+                                "PYTHONPATH": "./Omni-SR:$PYTHONPATH"}
     }
 
     ray.init(runtime_env=runtime_env)
