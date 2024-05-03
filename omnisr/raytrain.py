@@ -8,6 +8,13 @@ data_root="/mnt/repos/ds/DIV2K/"
 upsampling = 2
 
 def train_loop_per_worker():
+    import ray    
+    from ray.train.torch import TorchTrainer
+    from ray.train.torch import TorchConfig
+    from ray.train import ScalingConfig
+    from ray.train import Checkpoint
+    from ray.train import RunConfig
+
     import habana_frameworks.torch.core as htcore
     import torch
     import torch.optim as optim
@@ -135,7 +142,8 @@ def train_loop_per_worker():
         checkpoint = Checkpoint.from_directory(checkpoint_dir) # Build a Ray Train checkpoint from a directory
         ray.train.report(metrics=metrics) # Report metrics and checkpoint to Ray Train
 
-if __name__ == '__main__':
+def main():
+    import torch
     from ray.train.torch import TorchTrainer
     from ray.train.torch import TorchConfig
     from ray.train import ScalingConfig
@@ -162,3 +170,6 @@ if __name__ == '__main__':
         torch_config=torch_config
     )
     trainer.fit()
+
+if __name__ == '__main__':
+    main()
