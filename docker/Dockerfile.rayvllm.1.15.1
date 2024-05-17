@@ -1,25 +1,34 @@
 FROM krickwix/ray-habana:u2204.1.15.0
 
 ARG DEBIAN_FRONTEND=noninteractive
+
+ENV PATH="/usr/local/bin/python3.10:${PATH}"
+ENV PT_HPU_ENABLE_LAZY_COLLECTIVES=true
+
 RUN apt-get update && \
     apt-get install -y blt-dev dpkg-dev libbluetooth-dev libbz2-dev libdb-dev libexpat1-dev libffi-dev libgdbm-dev liblzma-dev libmpdec-dev libncursesw5-dev libreadline-dev libsqlite3-dev libssl-dev  systemtap-sdt-dev tk-dev zlib1g-dev wget && \
-    apt-get clean
-RUN wget https://www.python.org/ftp/python/3.10.13/Python-3.10.13.tgz && \
+    apt-get clean && \
+    wget https://www.python.org/ftp/python/3.10.13/Python-3.10.13.tgz && \
     tar -xvf Python-3.10.13.tgz && \
     cd Python-3.10.13 && \
     ./configure --enable-optimizations && \
     make -j 8 && \
-    make altinstall
-RUN ln -sf /usr/local/bin/python3.10 /usr/local/bin/python3 && \
-    ln -sf /usr/local/bin/python3.10 /usr/local/bin/python
-ENV PATH="/usr/local/bin/python3.10:${PATH}"
-
-RUN pip install --upgrade pip
-RUN pip install "git+https://github.com/huggingface/optimum-habana.git" \
-                "git+https://github.com/krickwix/DeepSpeed.git@fandrieu"
-RUN pip install  tiktoken ray[all]==2.20.0
-RUN wget https://vault.habana.ai/artifactory/gaudi-pt-modules/1.15.1/15/pytorch/ubuntu2204/pytorch_modules-v2.2.0_1.15.1_15.tgz && \
+    make altinstall && \
+    ln -sf /usr/local/bin/python3.10 /usr/local/bin/python3 && \
+    ln -sf /usr/local/bin/python3.10 /usr/local/bin/python && \
+    cd .. && \
+    rm -rf Python-3.10.13.tgz Python-3.10.13
+RUN pip install --upgrade pip && \
+    pip install "git+https://github.com/krickwix/DeepSpeed.git@fandrieu" && \
+    pip install --upgrade-strategy eager optimum[habana] && \
+    git clone https://github.com/HabanaAI/vllm-fork.git -b private/kzawora/habana_main_rebase_01bfb22 && \
+    cd vllm-fork && \
+    pip install -r requirements-hpu.txt && \
+    pip install . && \
+    cd .. && \
+    rm -rf vllm-fork && \
+    pip install tiktoken ray[all]==2.20.0 && \
+    wget https://vault.habana.ai/artifactory/gaudi-pt-modules/1.15.1/15/pytorch/ubuntu2204/pytorch_modules-v2.2.0_1.15.1_15.tgz && \
     tar xf pytorch_modules-v2.2.0_1.15.1_15.tgz && \
     ./install.sh 1.15.1 15 && \
     rm -rf pytorch_modules-v2.2.0_1.15.1_15.tgz install.sh *.whl
-ENV PT_HPU_ENABLE_LAZY_COLLECTIVES=true
