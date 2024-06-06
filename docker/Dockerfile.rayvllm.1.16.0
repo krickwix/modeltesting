@@ -1,0 +1,9 @@
+FROM vault.habana.ai/gaudi-docker/1.16.0/ubuntu22.04/habanalabs/pytorch-installer-2.2.2:latest
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+ENV PT_HPU_ENABLE_LAZY_COLLECTIVES=true
+
+RUN pip install "git+https://github.com/HabanaAI/DeepSpeed.git@1.16.0" && \
+    pip install "git+https://github.com/HabanaAI/vllm-fork@habana_main" && \
+    pip install tiktoken 
