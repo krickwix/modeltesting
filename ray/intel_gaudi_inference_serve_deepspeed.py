@@ -12,6 +12,7 @@ HABANA_ENVS = {
     "PT_HPU_ENABLE_WEIGHT_CPU_PERMUTE": "0",
     "PT_HPU_ENABLE_LAZY_COLLECTIVES": "true",
     "HABANA_VISIBLE_MODULES": "0,1,2,3,4,5,6,7",
+    "PYTHONWARNINGS": "ignore",
 }
 
 class Conversation:
@@ -118,6 +119,8 @@ class DeepSpeedInferenceWorker:
         kwargs["tensor_parallel"] = {"tp_size": self._world_size}
         # Enable the HPU graph, similar to the cuda graph.
         kwargs["enable_cuda_graph"] = True
+        # kwargs["replace_with_kernel_inject"] = True
+        # kwargs["replace_method"] = "auto"
         # Specify the injection policy, required by DeepSpeed Tensor parallelism.
         kwargs["injection_policy"] = get_ds_injection_policy(self.model_config)
 
@@ -138,11 +141,15 @@ class DeepSpeedInferenceWorker:
         gen_tokens = self.model.generate(input_tokens, 
                                         #  **config, 
                                         max_new_tokens=4096,
-                                        do_sample=False,
+                                        do_sample=True,
                                         temperature=0.6,
                                         top_p=0.9,                
                                         eos_token_id=self.terminators)
         response = gen_tokens[0][input_tokens.shape[-1]:]
+        response.detach().cpu()
+        import habana_frameworks.torch.core as htcore
+        htcore.mark_step()
+
         return self.tokenizer.decode(response, skip_special_tokens=True)
 
     def streaming_generate(self, conversation, streamer, **config):
@@ -283,6 +290,7 @@ class DeepSpeedLlamaModel:
         # Lazy mode should be True when using HPU graphs.
         config["lazy_mode"] = True
         # Non-streaming case
+
         if not streaming_response:
             return self.generate(prompts, **config)
 
@@ -296,4 +304,4 @@ class DeepSpeedLlamaModel:
         )
 
 # Replace the model ID with a path if necessary.
-entrypoint = DeepSpeedLlamaModel.bind(8, "/data/models/Meta-Llama-3-70B-Instruct")
+entrypoint = DeepSpeedLlamaModel.bind(8, "/data/models/Meta-Llama-3-8B-Instruct")

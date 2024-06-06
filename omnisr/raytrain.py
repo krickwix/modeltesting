@@ -1,8 +1,8 @@
-num_workers = 8
+num_workers = 4
 nb_epochs = 1000
 batch_size = 64
-learning_rate = 1e-4
-dataset_enlarge = 10
+learning_rate = 1e-3
+dataset_enlarge = 5
 window_size = 32
 data_root="/mnt/repos/ds/DIV2K/"
 upsampling = 2
@@ -159,7 +159,7 @@ def main():
     runtime_env = {"pip": ["einops","opencv-python","gitpython"],
                    "env_vars": {"PT_HPU_ENABLE_LAZY_COLLECTIVES": "true",
                                 "PT_HPU_LAZY_MODE": "0",
-                                "PYTHONPATH": "./Omni-SR:$PYTHONPATH"}
+                                "PYTHONWARNINGS": "ignore",}
     }
 
     ray.init(runtime_env=runtime_env)

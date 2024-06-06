@@ -60,7 +60,7 @@ save_step=35
 wandbact=1 # yes, we want to track stats through weights and biases, optional
 
 import wandb
-wandb.login(key='YOUR API KEY HERE')  #instructions are in the related video :)
+wandb.login(key='feb89c1532dfebff8d7a52681d1905765fed804b')  #instructions are in the related video :)
 
 experiment_name = wandb.util.generate_id()
 

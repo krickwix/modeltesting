@@ -9,7 +9,7 @@ openai_api_base = "http://localhost:8000/v1"
 
 class Conversation:
     def __init__(self):
-        self.history = [{"role": "system", "content": "you are a helpful and thorough assistant."}]
+        self.history = [{"role": "system", "content": "you are a helpful assistant."}]
 
     def add_user_input(self, user_input):
         self.history.append({"role": "user", "content": user_input})
@@ -41,9 +41,13 @@ while True:
     if user_prompt:
         conversation.add_user_input(user_prompt)
         assistant_response = client.chat.completions.create(
-                                                    model="meta-llama/Llama-2-70b-chat-hf",
-                                                    messages=conversation.get_conversation()).choices[0].message.content
-        print("\n**")
-        print(assistant_response)
-        conversation.add_assistant_response(assistant_response)
+                                                    model="meta-llama/Meta-Llama-3-70B-Instruct",
+                                                    messages=conversation.get_conversation(),stream=True)
+        result = ""
+        for chunk in assistant_response:
+            if chunk.choices[0].delta.content:
+              result += chunk.choices[0].delta.content
+              print(chunk.choices[0].delta.content,end="",flush=True)
+        
+        conversation.add_assistant_response(result)
         print("\n**")

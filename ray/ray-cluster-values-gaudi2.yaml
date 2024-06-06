@@ -10,7 +10,7 @@ image:
   tag: 1.15.1
   pullPolicy: IfNotPresent
 
-nameOverride: "kuberay"
+nameOverride: "llama3"
 fullnameOverride: ""
 
 imagePullSecrets: []
@@ -25,7 +25,14 @@ common:
       value: "all"
     - name: OMPI_MCA_btl_vader_single_copy_mechanism
       value: "none"
+    - name: PT_HPU_ENABLE_LAZY_COLLECTIVES
+      value: "true"
 head:
+  # image:
+  #   repository: krickwix/ray
+  #   tag: latest
+  #   pullPolicy: Always
+
   # rayVersion determines the autoscaler's image version.
   # It should match the Ray version in the image of the containers.
   # rayVersion: 2.9.0
@@ -54,6 +61,7 @@ head:
     #   requests:
     #     cpu: "500m"
     #     memory: "512Mi"
+  hostIPC: true
   labels: {}
   # Note: From KubeRay v0.6.0, users need to create the ServiceAccount by themselves if they specify the `serviceAccountName`
   # in the headGroupSpec. See https://github.com/ray-project/kuberay/pull/1128 for more details.
@@ -81,12 +89,12 @@ head:
   # for further guidance.
   resources:
     limits:
-      cpu: "100"
-      memory: "960G"
+      cpu: "64"
+      memory: "256G"
       habana.ai/gaudi: "8"
     requests:
-      cpu: "32"
-      memory: "32G"
+      cpu: "64"
+      memory: "256G"
       habana.ai/gaudi: "8"
   annotations: {}
   nodeSelector: {}
@@ -125,6 +133,12 @@ head:
 
 
 worker:
+  hostIPC: true
+  image:
+    repository: krickwix/ray-llm-habana
+    tag: 1.15.1
+    pullPolicy: Always
+
   # If you want to disable the default workergroup
   # uncomment the line below
   # disabled: true
@@ -157,11 +171,11 @@ worker:
   resources:
     limits:
       cpu: "96"
-      memory: "800G"
+      memory: "512G"
       habana.ai/gaudi: "8"
     requests:
       cpu: "96"
-      memory: "800G"
+      memory: "512G"
       habana.ai/gaudi: "8"
   annotations: {}
   nodeSelector: {}

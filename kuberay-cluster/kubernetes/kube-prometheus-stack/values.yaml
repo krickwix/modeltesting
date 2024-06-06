@@ -1018,10 +1018,10 @@ grafana:
   persistence:
     enabled: true
     type: sts
-    storageClassName: "gp2"
+    storageClassName: "local-path"
     accessModes:
       - ReadWriteOnce
-    size: 200Gi
+    size: 20Gi
     finalizers:
       - kubernetes.io/pvc-protection
 
@@ -2840,6 +2840,14 @@ prometheusOperator:
 ##
 prometheus:
   enabled: true
+  
+  extraScrapeConfigs: 
+    - job_name: 'prometheus-habana-exporter'
+      metrics_path: /metrics
+      static_configs:
+        - targets: ['metric-exporter:41611']
+      params:
+        module: [http_2xx]
 
   ## Toggle prometheus into agent mode
   ## Note many of features described below (e.g. rules, query, alerting, remote read, thanos) will not work in agent mode.
@@ -3397,7 +3405,7 @@ prometheus:
 
     ## enable --web.enable-remote-write-receiver flag on prometheus-server
     ##
-    enableRemoteWriteReceiver: false
+    enableRemoteWriteReceiver: true
 
     ## Name of the external label used to denote replica name
     ##
