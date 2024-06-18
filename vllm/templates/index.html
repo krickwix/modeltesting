@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chatbot</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+        }
+        #chatbox {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            width: 80%;
+            margin: 0 auto;
+            padding-bottom: 20px;
+        }
+        #chatlog {
+            flex: 1;
+            max-height: 80vh;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        .user, .assistant {
+            padding: 10px;
+            margin: 5px 0;
+            white-space: pre-wrap; /* Ensure whitespaces are preserved */
+        }
+        .user {
+            background-color: #f0f0f0;
+        }
+        .assistant {
+            background-color: #d0f0d0;
+        }
+        #inputArea {
+            display: flex;
+        }
+        #prompt {
+            flex: 1;
+            padding: 10px;
+        }
+        #send {
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="chatbox">
+        <div id="chatlog"></div>
+        <div id="inputArea">
+            <input type="text" id="prompt" placeholder="Enter your prompt here...">
+            <button id="send">Send</button>
+        </div>
+    </div>
+    <script>
+        $(document).ready(function() {
+            const eventSource = new EventSource('/stream');
+            let lastAssistantMessage = null;
+
+            eventSource.addEventListener('response', function(event) {
+                const data = JSON.parse(event.data);
+                if (lastAssistantMessage) {
+                    const currentMarkdown = lastAssistantMessage.data('markdown') + data.message;
+                    lastAssistantMessage.data('markdown', currentMarkdown);
+                    lastAssistantMessage.html(marked.parse(currentMarkdown));
+                    scrollChatToBottom();
+                }
+            });
+
+            $('#send').click(function() {
+                const userPrompt = $('#prompt').val();
+                if (userPrompt) {
+                    if (!validateInput(userPrompt)) {
+                        alert('Please enter a valid input');
+                        return;
+                    }
+                    $('#chatlog').append('<div class="user">' + userPrompt + '</div>');
+                    lastAssistantMessage = $('<div class="assistant"></div>');
+                    lastAssistantMessage.data('markdown', ''); // Initialize with empty markdown data
+                    $('#chatlog').append(lastAssistantMessage);
+                    scrollChatToBottom();
+                    $.ajax({
+                        url: '/chat',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ prompt: userPrompt }),
+                        success: function() {
+                            $('#prompt').val('');
+                        },
+                        error: function(xhr, status, error) {
+                            alert('Error sending message');
+                        }
+                    });
+                }
+            });
+
+            $('#prompt').keypress(function(e) {
+                if (e.which == 13) {
+                    $('#send').click();
+                }
+            });
+
+            function scrollChatToBottom() {
+                $('#chatlog').scrollTop($('#chatlog')[0].scrollHeight);
+            }
+        });
+
+        function validateInput(input) {
+            // Add your validation logic here
+            return true;
+        }
+    </script>
+</body>
+</html>
